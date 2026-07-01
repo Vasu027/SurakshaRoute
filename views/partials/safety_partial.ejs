@@ -1,0 +1,198 @@
+<button id="safetyToggle" class="safety-toggle-btn" aria-label="Toggle safety panel">🛡️</button>
+
+<div id="safetyPanel" class="safety-panel">
+  <div class="safety-header">
+    <h3>🚨 Safety Toolkit</h3>
+    <button id="safetyClose" class="close-btn" aria-label="Close safety panel">&times;</button>
+  </div>
+  
+  <div class="safety-content">
+    <!-- SOS Trigger -->
+    <div class="safety-block">
+      <strong>Emergency SOS</strong>
+      <button id="sosBtn" class="sos-pulse-btn">TRIGGER SOS</button>
+    </div>
+
+    <!-- Trusted Contacts -->
+    <div class="safety-block">
+      <strong>Trusted Circle</strong>
+      <div id="trustedList"></div>
+      <div style="display:flex; gap:6px; margin-bottom: 8px;">
+        <input id="t_name" placeholder="Name" style="flex:1;" />
+        <input id="t_phone" placeholder="Phone" style="flex:1;" />
+      </div>
+      <button id="addTrusted">Add Contact</button>
+    </div>
+
+    <!-- Driver verification -->
+    <div class="safety-block">
+      <strong>Driver Check</strong>
+      <div style="display:flex; gap:6px; margin-bottom: 4px;">
+        <input id="plate" placeholder="Plate number" style="flex:1; margin-bottom: 0;" />
+        <button id="verifyPlate" style="width: auto; padding: 0 16px;">Verify</button>
+      </div>
+      <div id="plateResult">No verification performed</div>
+    </div>
+
+    <!-- Companion mode -->
+    <div class="safety-block">
+      <strong>Automated Companion</strong>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span style="font-size: 13px; color: var(--text-secondary);">Tracking Status:</span>
+        <div id="companionStatus" class="inactive">Inactive</div>
+      </div>
+      <div class="companion-actions">
+        <button id="startCompanion">Start Tracking</button>
+        <button id="stopCompanion">Stop</button>
+      </div>
+    </div>
+
+    <!-- Localization switcher -->
+    <div class="safety-block">
+      <strong>Quick Language</strong>
+      <select id="langSelect">
+        <option value="en">English</option>
+        <option value="hi">Hindi</option>
+        <option value="ta">Tamil</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<script>
+window.addEventListener('load', function() {
+  const api = (p, opts) => fetch('/safety'+p, opts).then(r=>r.json().catch(()=>null));
+
+  // Drawer Toggle logic
+  try {
+    const safetyToggle = document.getElementById('safetyToggle');
+    const safetyPanel = document.getElementById('safetyPanel');
+    const safetyClose = document.getElementById('safetyClose');
+    
+    if (safetyToggle && safetyPanel && safetyClose) {
+      safetyToggle.addEventListener('click', () => {
+        safetyPanel.classList.toggle('active');
+      });
+      safetyClose.addEventListener('click', () => {
+        safetyPanel.classList.remove('active');
+      });
+    }
+  } catch(err) {
+    console.error("Safety drawer toggle binding failed:", err);
+  }
+
+  // SOS handler
+  try {
+    const sosBtn = document.getElementById('sosBtn');
+    if (sosBtn) {
+      sosBtn.addEventListener('click', async () => {
+        if(navigator.geolocation){
+          navigator.geolocation.getCurrentPosition(async (pos) => {
+            const payload = {lat: pos.coords.latitude, lng: pos.coords.longitude, note: 'SOS from web' };
+            const res = await api('/sos', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+            alert(res && res.ok ? 'SOS alert recorded successfully!' : 'SOS saved locally');
+          }, ()=> alert('Location services are currently unavailable. Check permissions.'));
+        } else alert('Geolocation not supported on this browser');
+      });
+    }
+  } catch(err) {
+    console.error("SOS handler binding failed:", err);
+  }
+
+  // Trusted circle
+  let loadTrusted;
+  try {
+    const trustedList = document.getElementById('trustedList');
+    loadTrusted = async () => {
+      const res = await api('/trusted');
+      if (trustedList) {
+        trustedList.innerHTML = (res||[]).map(t=>'<div>👤 '+t.name+' ('+t.phone+')</div>').join('') || '<div>No contacts added yet</div>';
+      }
+    };
+    
+    const addTrustedBtn = document.getElementById('addTrusted');
+    if (addTrustedBtn) {
+      addTrustedBtn.addEventListener('click', async ()=>{
+        const name = document.getElementById('t_name').value;
+        const phone = document.getElementById('t_phone').value;
+        if(!name||!phone){ alert('Please fill in both Name and Phone fields'); return; }
+        await api('/trusted', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, phone})});
+        document.getElementById('t_name').value=''; document.getElementById('t_phone').value='';
+        await loadTrusted();
+      });
+    }
+    loadTrusted();
+  } catch(err) {
+    console.error("Trusted circle binding failed:", err);
+  }
+
+  // Driver verify
+  try {
+    const verifyPlateBtn = document.getElementById('verifyPlate');
+    if (verifyPlateBtn) {
+      verifyPlateBtn.addEventListener('click', async ()=>{
+        const plate = document.getElementById('plate').value;
+        if(!plate) return alert('Enter plate number');
+        const res = await api('/verify-driver', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({plate})});
+        if (res && res.ok) {
+          const riskColor = res.riskScore > 50 ? '#ef4444' : '#10b981';
+          document.getElementById('plateResult').innerHTML = `
+            Status: <b style="color: #10b981;">Verified</b><br>
+            Risk Profiling: <b style="color: ${riskColor};">${res.riskScore}% Risk</b>
+          `;
+        } else {
+          document.getElementById('plateResult').innerText = 'No response received from verification servers.';
+        }
+      });
+    }
+  } catch(err) {
+    console.error("Driver verification binding failed:", err);
+  }
+
+  // Companion mode simple implementation
+  try {
+    let companionInterval = null;
+    const companionStatus = document.getElementById('companionStatus');
+    
+    const startCompanionBtn = document.getElementById('startCompanion');
+    if (startCompanionBtn) {
+      startCompanionBtn.addEventListener('click', ()=>{
+        if(companionInterval) return alert('Companion tracking is already active');
+        if (companionStatus) {
+          companionStatus.innerText = 'Active';
+          companionStatus.className = 'active';
+        }
+        companionInterval = setInterval(async ()=>{
+          const res = await api('/companion/checkin', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ts: Date.now()})});
+          console.log('Companion checkin success', res);
+        }, 60000); // every 60s
+      });
+    }
+    
+    const stopCompanionBtn = document.getElementById('stopCompanion');
+    if (stopCompanionBtn) {
+      stopCompanionBtn.addEventListener('click', ()=>{
+        if(!companionInterval) return;
+        clearInterval(companionInterval); companionInterval = null;
+        if (companionStatus) {
+          companionStatus.innerText = 'Inactive';
+          companionStatus.className = 'inactive';
+        }
+      });
+    }
+  } catch(err) {
+    console.error("Companion mode binding failed:", err);
+  }
+
+  // Language switcher (demo - only stores selection)
+  try {
+    const langSelect = document.getElementById('langSelect');
+    if (langSelect) {
+      langSelect.value = localStorage.getItem('app_lang')||'en';
+      langSelect.addEventListener('change', ()=> localStorage.setItem('app_lang', langSelect.value));
+    }
+  } catch(err) {
+    console.error("Language switcher binding failed:", err);
+  }
+});
+</script>

@@ -1,0 +1,28 @@
+<section class="form-container">
+  <form action="/auth/signup" method="post" class="form" aria-label="Sign up form">
+    <h2 class="form-title">Create Account</h2>
+
+    <label for="name">Full name</label>
+    <input id="name" name="name" type="text" placeholder="Your name" required autocomplete="name">
+
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" placeholder="you@example.com" required autocomplete="email">
+
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" placeholder="Choose a secure password" required autocomplete="new-password">
+
+    <label for="confirm">Confirm password</label>
+    <input id="confirm" name="confirm" type="password" placeholder="Repeat password" required>
+
+    <label for="emergencyPhone1">Emergency Phone 1</label>
+    <input id="emergencyPhone1" name="emergencyPhone1" type="tel" pattern="[0-9]{10,}" placeholder="e.g., 9876543210" required>
+
+    <label for="emergencyPhone2">Emergency Phone 2</label>
+    <input id="emergencyPhone2" name="emergencyPhone2" type="tel" pattern="[0-9]{10,}" placeholder="e.g., 9123456789" required>
+
+    <div class="form-actions">
+      <a href="/auth/login" class="link">Already have an account? Login</a>
+      <button type="submit" class="btn btn-primary">Sign up</button>
+    </div>
+  </form>
+</section>

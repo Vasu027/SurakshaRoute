@@ -1,0 +1,180 @@
+<div class="container dashboard-wrap">
+  <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+    <div>
+      <h2>Welcome, <%= user.name %> 👋</h2>
+      <p class="small-muted">Email: <%= user.email %></p>
+      <p>Your interactive safety hub is active. Access your location coordinates, search manually by city, or view local emergency havens.</p>
+    </div>
+
+    <div>
+      <div class="actions">
+        <button id="getLocationBtn" class="btn btn-primary">📍 Pin Location</button>
+        <button id="safeLocationsBtn" class="btn btn-success">🛡️ Show Safe Zones</button>
+      </div>
+
+      <div class="city-input">
+        <input id="cityInput" type="text" placeholder="Search by city (e.g., London)">
+        <button id="citySearchBtn" class="btn btn-info">Search</button>
+      </div>
+
+      <div id="locationResult" class="location-result" aria-live="polite">No location selected</div>
+    </div>
+  </div>
+
+  <div class="card" style="padding: 0; overflow: hidden; border-radius: var(--radius-lg); height: 520px;">
+    <!-- map container -->
+    <div id="map" class="map" style="height: 100%; border: none; width: 100%;"></div>
+  </div>
+</div>
+
+<!-- Leaflet (only loaded on dashboard) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script>
+window.addEventListener('load', function() {
+  let map, marker, userLat, userLng;
+
+  // Initialize map immediately on page load
+  try {
+    const mapEl = document.getElementById("map");
+    if (mapEl && typeof L !== 'undefined') {
+      map = L.map("map").setView([20.5937, 78.9629], 5); // Center of India
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors"
+      }).addTo(map);
+    } else {
+      console.warn("Leaflet library not loaded or map element missing.");
+    }
+  } catch(err) {
+    console.error("Leaflet map initialization failed:", err);
+  }
+
+  function getDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 +
+              Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
+              Math.sin(dLon/2)**2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return (R * c).toFixed(2);
+  }
+
+  function showOnMap(lat, lng, label) {
+    const resultEl = document.getElementById("locationResult");
+    if (resultEl) resultEl.innerText = `Latitude: ${lat}, Longitude: ${lng}`;
+
+    if (map) {
+      map.setView([lat, lng], 15);
+      if (marker) marker.remove();
+      marker = L.circleMarker([lat, lng], { radius:10, color:"blue", fillColor:"blue", fillOpacity:0.9 })
+        .addTo(map).bindPopup(label).openPopup();
+    }
+  }
+
+  function showError(error) {
+    switch (error.code) {
+      case error.PERMISSION_DENIED: alert("User denied geolocation request."); break;
+      case error.POSITION_UNAVAILABLE: alert("Location information is unavailable."); break;
+      case error.TIMEOUT: alert("The request to get user location timed out."); break;
+      default: alert("An unknown error occurred while retrieving location."); break;
+    }
+  }
+
+  // 1. Get Location Button
+  try {
+    const getLocationBtn = document.getElementById("getLocationBtn");
+    if (getLocationBtn) {
+      getLocationBtn.addEventListener("click", () => {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition((pos) => {
+            userLat = pos.coords.latitude; userLng = pos.coords.longitude;
+            showOnMap(userLat, userLng, "You are here!");
+          }, showError, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
+        } else {
+          const el = document.getElementById("locationResult");
+          if (el) el.innerText = "Geolocation not supported by this browser.";
+        }
+      });
+    }
+  } catch(err) {
+    console.error("Failed to bind getLocationBtn listener:", err);
+  }
+
+  // 2. City Search Button
+  try {
+    const cityBtn = document.getElementById("citySearchBtn");
+    if (cityBtn) {
+      cityBtn.addEventListener("click", async () => {
+        const city = (document.getElementById("cityInput") || {}).value || "";
+        if (!city.trim()) { alert("Please enter a city name."); return; }
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}`);
+          const data = await res.json();
+          if (!data || data.length === 0) { alert("City not found."); return; }
+          userLat = parseFloat(data[0].lat); userLng = parseFloat(data[0].lon);
+          showOnMap(userLat, userLng, "Manual city location");
+        } catch(e){ console.error(e); alert("Error fetching city location."); }
+      });
+    }
+  } catch(err) {
+    console.error("Failed to bind citySearchBtn listener:", err);
+  }
+
+  // 3. Show Safe Zones Button
+  try {
+    const safeBtn = document.getElementById("safeLocationsBtn");
+    if (safeBtn) {
+      safeBtn.addEventListener("click", async () => {
+        if (!userLat || !userLng) { alert("Please pin your location or search for a city first!"); return; }
+        const query = `
+          [out:json];
+          (
+            node(around:2000, ${userLat}, ${userLng})[amenity=police];
+            node(around:2000, ${userLat}, ${userLng})[amenity=hospital];
+            node(around:2000, ${userLat}, ${userLng})[shop=mall];
+          );
+          out;
+        `;
+        try {
+          const response = await fetch("https://overpass-api.de/api/interpreter", { method: "POST", body: query });
+          const data = await response.json();
+          if (!data || !data.elements || data.elements.length === 0) { alert("No nearby safe locations."); return; }
+
+          data.elements.forEach((place) => {
+            if (place.lat && place.lon && typeof L !== 'undefined') {
+              const type = place.tags && (place.tags.amenity || place.tags.shop) || "Safe Location";
+              const name = place.tags && place.tags.name || type;
+              const distance = getDistance(userLat, userLng, place.lat, place.lon);
+
+              const greenPlusIcon = L.divIcon({
+                html: '<div class="plus-marker">+</div>',
+                className: '',
+                iconSize: [18,18],
+                iconAnchor: [9,9],
+                popupAnchor: [0,-10]
+              });
+
+              L.marker([place.lat, place.lon], { icon: greenPlusIcon })
+                .addTo(map)
+                .bindPopup(`<b>${name}</b><br>Type: ${type}<br>Distance: ${distance} km`);
+            }
+          });
+
+          alert(`${data.elements.length} safe locations found nearby!`);
+        } catch(err) { console.error(err); alert("Error fetching safe locations."); }
+      });
+    }
+  } catch(err) {
+    console.error("Failed to bind safeLocationsBtn listener:", err);
+  }
+});
+</script>
+
+<style>
+/* small map marker style inside dashboard */
+.plus-marker {
+  width:18px;height:18px;background:#16a34a;color:#fff;font-weight:700;border-radius:3px;text-align:center;line-height:18px;
+}
+</style>

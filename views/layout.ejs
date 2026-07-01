@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title><%= title || 'SurakshaRoute' %></title>
+
+  <!-- Global Client Error Logger for Debugging -->
+  <script>
+    window.addEventListener('error', function(e) {
+      console.error("Global Error Caught:", e);
+      const errDiv = document.createElement('div');
+      errDiv.style = "position:fixed;top:0;left:0;width:100%;background:#ef4444;color:#fff;padding:12px;z-index:999999;font-family:monospace;font-size:12px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.3);";
+      errDiv.innerHTML = `⚠️ <b>Script Error:</b> ${e.message} at ${e.filename.split('/').pop()}:${e.lineno}:${e.colno} <button onclick="this.parentElement.remove()" style="margin-left:15px;background:#fff;color:#ef4444;border:none;padding:2px 8px;border-radius:4px;cursor:pointer;">Dismiss</button>`;
+      document.body.appendChild(errDiv);
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      console.error("Unhandled Promise Rejection Caught:", e);
+      const errDiv = document.createElement('div');
+      errDiv.style = "position:fixed;top:0;left:0;width:100%;background:#f59e0b;color:#000;padding:12px;z-index:999999;font-family:monospace;font-size:12px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.3);";
+      errDiv.innerHTML = `⚠️ <b>Promise Rejection:</b> ${e.reason} <button onclick="this.parentElement.remove()" style="margin-left:15px;background:#000;color:#f59e0b;border:none;padding:2px 8px;border-radius:4px;cursor:pointer;">Dismiss</button>`;
+      document.body.appendChild(errDiv);
+    });
+  </script>
+
+  <!-- Main stylesheet -->
+  <link rel="stylesheet" href="/styles.css" />
+
+  <!-- Optional favicon (if you have one in /public) -->
+  <link rel="icon" type="image/png" href="/favicon.png" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-row">
+      <a href="/" class="brand">🚨 <span class="brand-name">SurakshaRoute</span></a>
+
+      <nav>
+        <ul>
+          <% if (!currentUser) { %>
+            <li><a href="/auth/login" class="nav-link">Login</a></li>
+            <li><a href="/auth/signup" class="btn btn-primary small">Sign up</a></li>
+          <% } else { %>
+            <li class="welcome-text">Hello, <strong><%= currentUser.name %></strong></li>
+            <li>
+              <form method="post" action="/auth/logout" style="display:inline">
+                <button type="submit" class="btn btn-ghost">Logout</button>
+              </form>
+            </li>
+          <% } %>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <% if (error) { %>
+      <div class="alert alert-error"><%= error %></div>
+    <% } %>
+    <% if (success) { %>
+      <div class="alert alert-success"><%= success %></div>
+    <% } %>
+
+    <%- body %>
+  </main>
+
+  
+<!-- Floating Chatbot Toggle Button -->
+<button id="chatbotToggle" class="chatbot-toggle-btn" aria-label="Toggle chatbot">💬</button>
+
+<!-- Floating Chatbot Drawer -->
+<div id="chatbotContainer" class="chatbot-container">
+  <div class="chatbot-header">
+    <h3>🤖 Suraksha Assistant</h3>
+    <button id="chatbotClose" class="close-btn" aria-label="Close chatbot">&times;</button>
+  </div>
+  <div id="msgs"></div>
+  <form id="form">
+    <input id="inp" type="text" placeholder="Ask me anything..." required autocomplete="off" />
+    <button type="submit">Send</button>
+  </form>
+</div>
+
+<script src="/chatbot-secure.js"></script>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-inner">© <%= new Date().getFullYear() %> SurakshaRoute — All Rights Reserved</div>
+  </div>
+</footer>
+<%- include('partials/safety_partial') %>
+</body>
+</html>
